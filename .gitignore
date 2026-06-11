@@ -1,0 +1,6 @@
+node_modules/
+dist/
+logs/
+*.sqlite
+auth_info.json
+.env
