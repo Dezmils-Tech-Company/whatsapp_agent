@@ -2,6 +2,8 @@ import { makeWASocket, fetchLatestBaileysVersion } from "baileys";
 import qrcode from "qrcode-terminal";
 import { logger } from "./utils/logger.js";
 
+export let lastQrString: string | null = null;
+
 export async function createBotSocket(authState: any) {
   const { version } = await fetchLatestBaileysVersion();
   const socket = makeWASocket({
@@ -24,6 +26,7 @@ export async function createBotSocket(authState: any) {
       const lastQr = (socket as any)._lastPrintedQr as string | undefined;
       if (qr !== lastQr) {
         (socket as any)._lastPrintedQr = qr;
+        lastQrString = qr;
         logger.info("QR received — display it in terminal for scanning.");
         qrcode.generate(qr, { small: true });
         console.log('--- QR string (if you need to paste elsewhere) ---');
@@ -34,6 +37,7 @@ export async function createBotSocket(authState: any) {
     if (connection === "open") {
       // clear cached QR when connected
       (socket as any)._lastPrintedQr = undefined;
+      lastQrString = null;
       socket.sendPresenceUpdate("unavailable");
       logger.info("Bot connected and presence set to unavailable.");
     }

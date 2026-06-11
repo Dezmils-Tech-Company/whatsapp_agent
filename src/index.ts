@@ -1,5 +1,5 @@
 import { useMultiFileAuthState } from "baileys/lib/Utils/use-multi-file-auth-state.js";
-import { createBotSocket } from "./bot.js";
+import { createBotSocket, lastQrString } from "./bot.js";
 import { Database } from "./db/database.js";
 import { config } from "./config.js";
 import { logger } from "./utils/logger.js";
@@ -82,7 +82,7 @@ async function bootstrap() {
 
   // ── HEALTH CHECK SERVER FOR RENDER ────────────────────────────────────────
   // Render requires a service to listen on a port. This minimal HTTP server
-  // provides a health check endpoint so Render knows the bot is running.
+  // provides a health check endpoint and a live QR access page.
   const healthServer = http.createServer((req, res) => {
     if (req.url === "/health" && req.method === "GET") {
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -94,9 +94,45 @@ async function bootstrap() {
           uptime: process.uptime(),
         })
       );
+    } else if (req.url === "/qr" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      const qrContent = lastQrString
+        ? `<p>Scan this QR code with WhatsApp to authenticate the bot:</p>
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(
+            lastQrString
+          )}" alt="WhatsApp QR code" />
+          <p>Or use the raw QR text below if needed:</p>
+          <pre style="white-space: pre-wrap; word-break: break-all;">${lastQrString}</pre>
+          <p><small>Refresh this page after a new QR is generated.</small></p>`
+        : `<p>No QR code is currently available.</p>
+          <p>Start the bot and check back here when the connection needs authentication.</p>`;
+      res.end(`<!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <title>WhatsApp Bot QR</title>
+          </head>
+          <body style="font-family: Arial, sans-serif; margin: 24px;">
+            <h1>WhatsApp Bot QR Access</h1>
+            ${qrContent}
+            <p><a href="/">Back to status</a></p>
+          </body>
+        </html>`);
     } else if (req.url === "/" && req.method === "GET") {
-      res.writeHead(200, { "Content-Type": "text/plain" });
-      res.end("WhatsApp Bot is running\n");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(`<!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <title>WhatsApp Bot Live</title>
+          </head>
+          <body style="font-family: Arial, sans-serif; margin: 24px;">
+            <h1>WhatsApp Bot is running</h1>
+            <p>Service status: <strong>online</strong></p>
+            <p><a href="/qr">Open QR access page</a></p>
+            <p><small>Use this page from your Render live URL to retrieve the latest QR scan link.</small></p>
+          </body>
+        </html>`);
     } else {
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("Not Found\n");
