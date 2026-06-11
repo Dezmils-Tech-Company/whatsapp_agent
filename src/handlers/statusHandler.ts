@@ -33,7 +33,7 @@ export async function handlePresenceUpdate(socket: WASocket, update: any, db: Da
   }
 
   try {
-    await socket.sendMessage(contact, { text: status.includes("love") ? "❤️" : "🙏" });
+    await socket.sendMessage(contact, { text: status.includes("love") ? "" : "" });
     logger.info(`Reacted to status update from ${contact}.`);
   } catch (error) {
     logger.warn(`Failed to react to status update from ${contact}.`, error as Error);

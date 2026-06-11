@@ -28,6 +28,7 @@ type ConversationStateDocument = {
   depth: number;
   history: string[];
   updatedAt: number;
+  allowDirectChat?: boolean;
 };
 
 type AppointmentDocument = {
@@ -158,12 +159,12 @@ export class DatabaseLayer {
     return await states.findOne({ jid });
   }
 
-  async updateConversationState(jid: string, currentMenuId: string, depth: number, history: string[]) {
+  async updateConversationState(jid: string, currentMenuId: string, depth: number, history: string[], allowDirectChat: boolean = false) {
     this.ensureConnected();
     const states = this.conversationStates!;
     await states.updateOne(
       { jid },
-      { $set: { currentMenuId, depth, history, updatedAt: Date.now() } },
+      { $set: { currentMenuId, depth, history, updatedAt: Date.now(), allowDirectChat } },
       { upsert: true }
     );
   }

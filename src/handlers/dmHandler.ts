@@ -6,7 +6,6 @@ import { extractMessageText } from "../utils/messageHelpers.js";
 import {
   formatMenuMessage,
   getNextMenu,
-  shouldEscalate,
   conversationMenus,
 } from "../rules/conversationMenu.js";
 import { BusinessService } from "../services/businessService.js";
@@ -22,109 +21,52 @@ export async function handleDirectMessage(
   const jid = message.key?.remoteJid ?? "";
   const text = extractMessageText(message.message ?? undefined) ?? "";
 
-  if (!text.trim()) {
-    return;
-  }
+  if (!text.trim()) return;
 
-  // Check if user is blocked
+  // Blocked users — ignore silently
   if (await db.isBlocked(jid)) {
     logger.info(`Ignored message from blocked user ${jid}.`);
     return;
   }
 
-  // Get business owner JID for notifications
   const ownerJid = await businessService.getOwnerJid(businessId);
-
-  // Get conversation state
   const state = await db.getConversationState(jid);
 
-  // NEW USERS → Show start menu only
+  // ── RETURNING USER WITH ACTIVE CHAT ──────────────────────────────────────
+  // Once allowDirectChat is true, never show menus again. Just pass through.
+  if (state?.allowDirectChat) {
+    logger.info(`Free chat from ${jid}: ${text}`);
+    // Forward to owner or handle elsewhere — no menu, no interference
+    if (ownerJid) {
+      await socket.sendMessage(ownerJid, {
+        text: `💬 Message from ${jid}:\n${text}`,
+      });
+    }
+    return;
+  }
+
+  // ── BRAND NEW USER — no state at all ─────────────────────────────────────
   if (!state) {
     const menuMessage = formatMenuMessage("start");
     await socket.sendMessage(jid, { text: menuMessage });
     await db.updateConversationState(jid, "start", 0, []);
-    logger.info(`Started conversation menu with ${jid}`);
+    logger.info(`New user ${jid} — sent start menu.`);
     return;
   }
 
-  // RETURNING USERS with chat history → skip menu, handle appointment or normal chat
-  if (state.currentMenuId === "start" || state.currentMenuId === "website" || state.currentMenuId === "ai" || state.currentMenuId === "filing") {
-    // User is still in main menu flow → expect numbered option
-    const optionNumber = parseInt(text.trim(), 10);
-    if (isNaN(optionNumber) || optionNumber < 1) {
-      await socket.sendMessage(jid, {
-        text: "Please reply with the option number (1, 2, 3, or 4).",
-      });
-      return;
-    }
+  // ── USERS CURRENTLY IN APPOINTMENT FLOW ──────────────────────────────────
 
-    const { nextMenuId, response } = getNextMenu(state.currentMenuId, optionNumber);
-
-    // Send option response if available
-    if (response) {
-      await socket.sendMessage(jid, { text: response });
-    }
-
-    // Check if we should escalate or move to appointment booking
-    const nextDepth = state.depth + 1;
-    
-    // Check if user selected appointment booking
-    if (nextMenuId === "appointment_name") {
-      // Move to appointment booking flow
-      const appointmentMenu = formatMenuMessage("appointment_name");
-      await socket.sendMessage(jid, { text: appointmentMenu });
-      await db.updateConversationState(jid, "appointment_name", 0, [`${state.currentMenuId}(${optionNumber})`]);
-      logger.info(`${jid} started appointment booking.`);
-      return;
-    }
-
-    // Check if we should escalate to direct chat (after 3 steps of normal menu)
-    if (shouldEscalate(nextMenuId, nextDepth)) {
-      await db.resetConversationState(jid);
-      await socket.sendMessage(jid, {
-        text: "I'll pass this along to the team. What would you like to discuss?",
-      });
-      logger.info(`Escalated conversation with ${jid} to direct chat (depth: ${nextDepth}).`);
-      return;
-    }
-
-    // Show next menu
-    const nextMenu = conversationMenus[nextMenuId!];
-    if (!nextMenu) {
-      await socket.sendMessage(jid, {
-        text: "Something went wrong. Let me restart the menu.",
-      });
-      await db.resetConversationState(jid);
-      return;
-    }
-
-    const nextMenuMessage = formatMenuMessage(nextMenuId!);
-    await socket.sendMessage(jid, { text: nextMenuMessage });
-
-    // Update conversation state with new menu and history
-    const newHistory = [...state.history, `${state.currentMenuId}(${optionNumber})`];
-    await db.updateConversationState(jid, nextMenuId!, nextDepth, newHistory);
-
-    logger.info(`${jid} selected option ${optionNumber} in menu "${state.currentMenuId}".`);
-    return;
-  }
-
-  // APPOINTMENT BOOKING FLOW
   if (state.currentMenuId === "appointment_name") {
     const name = text.trim();
-    const appointmentMenu = formatMenuMessage("appointment_topic");
-    await socket.sendMessage(jid, { text: appointmentMenu });
+    await socket.sendMessage(jid, { text: formatMenuMessage("appointment_topic") });
     await db.updateConversationState(jid, "appointment_topic", 1, [name]);
-    logger.info(`${jid} provided name for appointment: ${name}`);
     return;
   }
 
   if (state.currentMenuId === "appointment_topic") {
     const topic = text.trim();
-    const appointmentMenu = formatMenuMessage("appointment_time");
-    await socket.sendMessage(jid, { text: appointmentMenu });
+    await socket.sendMessage(jid, { text: formatMenuMessage("appointment_time") });
     await db.updateConversationState(jid, "appointment_time", 2, [...state.history, topic]);
-    logger.info(`${jid} provided topic for appointment: ${topic}`);
     return;
   }
 
@@ -133,29 +75,166 @@ export async function handleDirectMessage(
     const name = state.history[0] || "Unknown";
     const topic = state.history[1] || "Not specified";
 
-    // Save appointment
     await db.saveAppointment(jid, name, topic, preferredTime);
 
-    // Confirm to user
     await socket.sendMessage(jid, {
       text: `✅ Appointment booked!\n\n📋 Details:\nName: ${name}\nTopic: ${topic}\nPreferred Time: ${preferredTime}\n\nWe'll be in touch soon!`,
     });
 
-    // Notify business owner
     if (ownerJid) {
       await socket.sendMessage(ownerJid, {
         text: `📅 New Appointment Booking:\n\nName: ${name}\nFrom: ${jid}\nTopic: ${topic}\nPreferred Time: ${preferredTime}`,
       });
     }
 
-    // Reset conversation state after appointment is booked
-    await db.resetConversationState(jid);
-    logger.info(`${jid} completed appointment booking. Details: ${name} | ${topic} | ${preferredTime}`);
+    // Grant direct chat — they will never see a menu again
+    await db.updateConversationState(jid, "chatting", 0, [], true);
+    logger.info(`${jid} completed appointment booking — direct chat granted.`);
     return;
   }
 
-  // NORMAL CHAT (no menu state, just reply)
-  logger.info(`${jid} sent: ${text}`);
+  // ── USERS CURRENTLY IN AGENT FLOW ────────────────────────────────────────
+
+  if (state.currentMenuId === "agent_start") {
+    const firstAnswer = text.trim();
+    await socket.sendMessage(jid, { text: formatMenuMessage("agent_problem") });
+    await db.updateConversationState(jid, "agent_problem", 1, [firstAnswer]);
+    return;
+  }
+
+  if (state.currentMenuId === "agent_problem") {
+    const problem = text.trim();
+    await socket.sendMessage(jid, { text: formatMenuMessage("agent_scale") });
+    await db.updateConversationState(jid, "agent_scale", 2, [...state.history, problem]);
+    return;
+  }
+
+  if (state.currentMenuId === "agent_scale") {
+    const scale = text.trim();
+    await socket.sendMessage(jid, { text: formatMenuMessage("agent_priority") });
+    await db.updateConversationState(jid, "agent_priority", 3, [...state.history, scale]);
+    return;
+  }
+
+  if (state.currentMenuId === "agent_priority") {
+    const priority = text.trim();
+    await socket.sendMessage(jid, { text: formatMenuMessage("agent_timeline") });
+    await db.updateConversationState(jid, "agent_timeline", 4, [...state.history, priority]);
+    return;
+  }
+
+  if (state.currentMenuId === "agent_timeline") {
+    const timeline = text.trim();
+    await socket.sendMessage(jid, { text: formatMenuMessage("agent_budget") });
+    await db.updateConversationState(jid, "agent_budget", 5, [...state.history, timeline]);
+    return;
+  }
+
+  if (state.currentMenuId === "agent_budget") {
+    const budget = text.trim();
+    const [firstAnswer, problem, scale, priority, timeline] = state.history;
+
+    const summary =
+      `✅ Thanks! Here is what we received:\n\n` +
+      `- Goal: ${firstAnswer || "Not provided"}\n` +
+      `- Main problem: ${problem || "Not provided"}\n` +
+      `- Business size: ${scale || "Not provided"}\n` +
+      `- Priority automation: ${priority || "Not provided"}\n` +
+      `- Timeline: ${timeline || "Not provided"}\n` +
+      `- Budget: ${budget || "Not provided"}`;
+
+    await socket.sendMessage(jid, {
+      text: `${summary}\n\nOur team will review this and get back to you shortly.`,
+    });
+
+    if (ownerJid) {
+      await socket.sendMessage(ownerJid, {
+        text:
+          `🤖 New WhatsApp Agent Request:\n\nFrom: ${jid}\n` +
+          `Goal: ${firstAnswer || "N/A"}\nProblem: ${problem || "N/A"}\n` +
+          `Scale: ${scale || "N/A"}\nPriority: ${priority || "N/A"}\n` +
+          `Timeline: ${timeline || "N/A"}\nBudget: ${budget || "N/A"}`,
+      });
+    }
+
+    // Grant direct chat — they will never see a menu again
+    await db.updateConversationState(jid, "chatting", 0, [], true);
+    logger.info(`${jid} completed agent flow — direct chat granted.`);
+    return;
+  }
+
+  // ── USERS IN NUMERIC MENU FLOW ────────────────────────────────────────────
+  // Only reaches here if state exists but is NOT in a free-text flow
+  // and NOT already on direct chat.
+
+  if (conversationMenus[state.currentMenuId]) {
+    const optionNumber = parseInt(text.trim(), 10);
+
+    if (isNaN(optionNumber) || optionNumber < 1) {
+      // If the user sent something that's not a valid option, resend the current menu
+      // so they can choose without extra generic prompts.
+      await socket.sendMessage(jid, { text: formatMenuMessage(state.currentMenuId) });
+      return;
+    }
+
+    const { nextMenuId, response } = getNextMenu(state.currentMenuId, optionNumber);
+
+    if (response) {
+      await socket.sendMessage(jid, { text: response });
+    }
+
+    // Branching into appointment flow
+    if (nextMenuId === "appointment_name") {
+      await socket.sendMessage(jid, { text: formatMenuMessage("appointment_name") });
+      await db.updateConversationState(jid, "appointment_name", 0, [
+        ...state.history,
+        `${state.currentMenuId}(${optionNumber})`,
+      ]);
+      return;
+    }
+
+    // Branching into agent flow
+    if (nextMenuId === "agent_start") {
+      await socket.sendMessage(jid, { text: formatMenuMessage("agent_start") });
+      await db.updateConversationState(jid, "agent_start", 0, [
+        ...state.history,
+        `${state.currentMenuId}(${optionNumber})`,
+      ]);
+      return;
+    }
+
+    // Next numeric menu exists — show it
+    if (nextMenuId && conversationMenus[nextMenuId]) {
+      await socket.sendMessage(jid, { text: formatMenuMessage(nextMenuId) });
+      await db.updateConversationState(
+        jid,
+        nextMenuId,
+        state.depth + 1,
+        [...state.history, `${state.currentMenuId}(${optionNumber})`]
+      );
+      return;
+    }
+
+    // chat_done option selected — grant direct chat
+    if (state.currentMenuId === "chat_done") {
+      await db.updateConversationState(jid, "chatting", 0, [], true);
+      await socket.sendMessage(jid, {
+        text: "✅ You're all set — you can now continue the conversation freely.",
+      });
+      return;
+    }
+
+    // Terminal option on any other menu — grant direct chat instead of
+    // bouncing them back to the start menu, since they have completed a flow
+    await db.updateConversationState(jid, "chatting", 0, [], true);
+    logger.info(`${jid} reached terminal option in "${state.currentMenuId}" — direct chat granted.`);
+    return;
+  }
+
+  // ── FALLBACK ──────────────────────────────────────────────────────────────
+  // State exists but currentMenuId is unrecognised (e.g. "chatting" without
+  // allowDirectChat flag set — shouldn't happen but handle gracefully).
+  logger.warn(`${jid} has unrecognised menu state "${state.currentMenuId}" — granting direct chat.`);
+  await db.updateConversationState(jid, "chatting", 0, [], true);
+  logger.info(`Free chat from ${jid}: ${text}`);
 }
-
-

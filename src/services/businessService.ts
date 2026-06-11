@@ -23,7 +23,7 @@ export class BusinessService {
         businessName,
         ownerJid,
         description: `Automated WhatsApp bot for ${businessName}`,
-        welcomeMessage: `👋 Hi! Welcome to ${businessName}. How can I help you?`,
+        welcomeMessage: ` Hi! Welcome to ${businessName}. How can I help you?`,
         appointmentEnabled: true,
         quoteEnabled: false,
         quoteCron: "0 8 * * *",
@@ -112,7 +112,7 @@ export class BusinessService {
     const config = await this.db.getBusinessConfig(businessId);
     return (
       config?.welcomeMessage ||
-      `👋 Hi! How can I help you today?\n\nSelect an option:`
+      ` Hi! How can I help you today?\n\nSelect an option:`
     );
   }
 }
