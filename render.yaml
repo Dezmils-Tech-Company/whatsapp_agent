@@ -8,6 +8,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3000
       - key: AUTH_FOLDER
         value: ./auth_info
       - key: LOG_FILE

@@ -29,4 +29,5 @@ export const config = {
   quietWindowEnd: process.env.QUIET_WINDOW_END ?? "08:00",
   replyCooldownSeconds: Number(process.env.REPLY_COOLDOWN_SECONDS ?? 60),
   logFile: process.env.LOG_FILE ?? "./logs/bot.log",
+  port: Number(process.env.PORT ?? 3000),
 };

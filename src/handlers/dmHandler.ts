@@ -239,15 +239,6 @@ export async function handleDirectMessage(
       return;
     }
 
-    // chat_done option selected — grant direct chat
-    if (state.currentMenuId === "chat_done") {
-      await db.updateConversationState(jid, "chatting", 0, [], true);
-      await socket.sendMessage(jid, {
-        text: "✅ You're all set — you can now continue the conversation freely.",
-      });
-      return;
-    }
-
     // Terminal option on any other menu — grant direct chat instead of
     // bouncing them back to the start menu, since they have completed a flow
     await db.updateConversationState(jid, "chatting", 0, [], true);

@@ -9,6 +9,7 @@ import { handleConnectionUpdate } from "./handlers/connectionHandler.js";
 import { startDailyQuoteScheduler } from "./utils/scheduler.js";
 import { ViolationTracker } from "./rules/violationTracker.js";
 import { BusinessService } from "./services/businessService.js";
+import http from "http";
 
 let db: Database;
 let tracker: ViolationTracker;
@@ -78,6 +79,33 @@ async function bootstrap() {
   tracker = new ViolationTracker(db);
   await initializeSocket();
   startDailyQuoteScheduler(() => socket, db);
+
+  // ── HEALTH CHECK SERVER FOR RENDER ────────────────────────────────────────
+  // Render requires a service to listen on a port. This minimal HTTP server
+  // provides a health check endpoint so Render knows the bot is running.
+  const healthServer = http.createServer((req, res) => {
+    if (req.url === "/health" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          status: "ok",
+          bot: "whatsapp",
+          timestamp: new Date().toISOString(),
+          uptime: process.uptime(),
+        })
+      );
+    } else if (req.url === "/" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end("WhatsApp Bot is running\n");
+    } else {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Not Found\n");
+    }
+  });
+
+  healthServer.listen(config.port, () => {
+    logger.info(`Health check server listening on port ${config.port}`);
+  });
 }
 
 bootstrap().catch((error) => {
