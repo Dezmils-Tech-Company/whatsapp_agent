@@ -9,6 +9,9 @@ import {
   conversationMenus,
 } from "../rules/conversationMenu.js";
 import { BusinessService } from "../services/businessService.js";
+import { getAutoReply } from "../rules/autoReply.js";
+import { dmRules } from "../rules/dmRules.js";
+import { config } from "../config.js";
 
 export async function handleDirectMessage(
   socket: WASocket,
@@ -29,8 +32,29 @@ export async function handleDirectMessage(
     return;
   }
 
+  // Fetch conversation state early for reuse
+  let state = await db.getConversationState(jid);
+
+  // ── CHECK FOR AUTOREPLY RULES ─────────────────────────────────────────────
+  const autoReply = getAutoReply(
+    text,
+    jid,
+    dmRules.autoReplies,
+    config.quietWindowStart,
+    config.quietWindowEnd,
+    config.replyCooldownSeconds
+  );
+
+  if (autoReply) {
+    await socket.sendMessage(jid, { text: autoReply });
+    logger.info(`Sent autoreply to ${jid}: "${autoReply}"`);
+    // For new users, return after autoreply. For users with state, continue processing.
+    if (!state) {
+      return;
+    }
+  }
+
   const ownerJid = await businessService.getOwnerJid(businessId);
-  const state = await db.getConversationState(jid);
 
   // ── RETURNING USER WITH ACTIVE CHAT ──────────────────────────────────────
   // Once allowDirectChat is true, never show menus again. Just pass through.

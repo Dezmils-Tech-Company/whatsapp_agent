@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: whatsapp-bot
+    runtime: node
+    plan: free
+    startCommand: npm run start
+    buildCommand: npm install && npm run build
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_FOLDER
+        value: ./auth_info
+      - key: LOG_FILE
+        value: ./logs/bot.log
+      - key: MONGO_URI
+        scope: secret
+      - key: MONGO_DB
+        value: whatsapp-bot
+      - key: BUSINESS_ID
+        value: default-business
+      - key: BUSINESS_NAME
+        value: My Business
+      - key: OWNER_JID
+        scope: secret
+      - key: QUOTE_TIME
+        value: 08:00
+      - key: QUIET_WINDOW_START
+        value: 22:00
+      - key: QUIET_WINDOW_END
+        value: 08:00
+      - key: REPLY_COOLDOWN_SECONDS
+        value: 60

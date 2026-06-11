@@ -1,6 +1,32 @@
+# Dependencies
 node_modules/
+package-lock.json
+
+# Build output
 dist/
+*.tsbuildinfo
+
+# Runtime files
 logs/
+*.log
 *.sqlite
-auth_info.json
+
+# Authentication and sensitive data
 .env
+.env.local
+.env.*.local
+auth_info.json
+auth_info/
+
+# IDE and OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
