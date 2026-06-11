@@ -8,9 +8,11 @@ import { handlePresenceUpdate } from "./handlers/statusHandler.js";
 import { handleConnectionUpdate } from "./handlers/connectionHandler.js";
 import { startDailyQuoteScheduler } from "./utils/scheduler.js";
 import { ViolationTracker } from "./rules/violationTracker.js";
+import { BusinessService } from "./services/businessService.js";
 
 let db: Database;
 let tracker: ViolationTracker;
+let businessService: BusinessService;
 let socket = null as any;
 
 async function initializeSocket() {
@@ -19,7 +21,7 @@ async function initializeSocket() {
   socket.ev.on("creds.update", saveCreds);
 
   socket.ev.on("messages.upsert", async (upsert: any) => {
-    await handleIncomingMessages(socket, upsert, tracker, db);
+    await handleIncomingMessages(socket, upsert, tracker, db, config.businessId);
   });
 
   socket.ev.on("presence.update", async (update: any) => {
@@ -49,6 +51,8 @@ async function restartSocket() {
 
 async function bootstrap() {
   logger.info("Starting WhatsApp bot...");
+  logger.info(`Business: ${config.businessName} (ID: ${config.businessId})`);
+
   db = new Database(config.mongoUri, config.mongoDbName);
 
   try {
@@ -61,6 +65,14 @@ async function bootstrap() {
       logger.error(`Failed to connect to MongoDB at ${config.mongoUri}.`, error as Error);
     }
     process.exit(1);
+  }
+
+  // Initialize business service and configuration
+  businessService = new BusinessService(db);
+  if (config.ownerJid) {
+    await businessService.initializeBusiness(config.businessId, config.businessName, config.ownerJid);
+  } else {
+    logger.warn("OWNER_JID not set in environment. Business configuration incomplete.");
   }
 
   tracker = new ViolationTracker(db);

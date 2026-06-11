@@ -17,6 +17,9 @@ function quoteTimeToCron(value: string): string {
 }
 
 export const config = {
+  businessId: process.env.BUSINESS_ID ?? "default-business",
+  businessName: process.env.BUSINESS_NAME ?? "My Business",
+  ownerJid: process.env.OWNER_JID ?? "", // WhatsApp JID of business owner
   authFolder: process.env.AUTH_FOLDER ?? "./auth_info",
   mongoUri: process.env.MONGO_URI ?? "mongodb://localhost:27017",
   mongoDbName: process.env.MONGO_DB ?? "whatsapp-bot",

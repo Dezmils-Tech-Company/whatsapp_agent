@@ -5,7 +5,7 @@ import { handleGroupMessage } from "./groupHandler.js";
 import type { Database } from "../db/database.js";
 import type { ViolationTracker } from "../rules/violationTracker.js";
 
-export async function handleIncomingMessages(socket: WASocket, upsert: any, tracker: ViolationTracker, db: Database) {
+export async function handleIncomingMessages(socket: WASocket, upsert: any, tracker: ViolationTracker, db: Database, businessId: string) {
   const messages = Array.isArray(upsert?.messages) ? upsert.messages : [];
 
   for (const msg of messages) {
@@ -22,7 +22,7 @@ export async function handleIncomingMessages(socket: WASocket, upsert: any, trac
       if (remoteJid.endsWith("@g.us")) {
         await handleGroupMessage(socket, msg, tracker, db);
       } else {
-        await handleDirectMessage(socket, msg, tracker, db);
+        await handleDirectMessage(socket, msg, tracker, db, businessId);
       }
     } catch (error) {
       logger.error("Failed to handle incoming message.", error as Error);
