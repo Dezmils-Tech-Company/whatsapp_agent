@@ -33,10 +33,9 @@ function containsKeyword(text: string, keyword: string) {
 }
 
 function formatIntroMessage(businessName?: string) {
-  const name = businessName || "this business";
+  const name = businessName || "Dezmils Tech Company";
   return (
-    `Hello! You reached ${name}.\n\n` +
-    `This is an automated business agent. For a normal live chat, reply with "5" to continue and connect to a human.`
+    `  This is an automated business agent. For a normal live chat, reply with "5" to continue and connect to a human.`
   );
 }
 
