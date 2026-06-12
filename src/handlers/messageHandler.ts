@@ -17,12 +17,24 @@ export async function handleIncomingMessages(socket: WASocket, upsert: any, trac
 
       const participant = msg.key.participant ?? remoteJid;
       const messageId = msg.key.id ?? "";
-      await socket.sendReceipt(remoteJid, participant, [messageId], "read");
 
       if (remoteJid.endsWith("@g.us")) {
+        // For groups we keep previous behavior: mark as read then handle
+        await socket.sendReceipt(remoteJid, participant, [messageId], "read");
         await handleGroupMessage(socket, msg, tracker, db);
       } else {
-        await handleDirectMessage(socket, msg, tracker, db, businessId);
+        // For direct messages, only mark read when the bot actually responds.
+        const state = await db.getConversationState(remoteJid);
+
+        // If user has free chat enabled, do NOT mark incoming messages read.
+        if (state?.allowDirectChat) {
+          await handleDirectMessage(socket, msg, tracker, db, businessId);
+        } else {
+          const responded = await handleDirectMessage(socket, msg, tracker, db, businessId);
+          if (responded) {
+            await socket.sendReceipt(remoteJid, participant, [messageId], "read");
+          }
+        }
       }
     } catch (error) {
       logger.error("Failed to handle incoming message.", error as Error);
