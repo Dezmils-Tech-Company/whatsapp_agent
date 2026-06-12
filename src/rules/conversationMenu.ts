@@ -16,19 +16,19 @@ export interface Menu {
 export const conversationMenus: Record<string, Menu> = {
   start: {
     id: "start",
-    message: " Hello, This is Dezmils Tech Company, how may we help you today?\n\nSelect an option:",
+    message: "Hello, This is Dezmils Tech Company, how may we help you today?\n\nSelect an option:",
     options: [
       { number: 1, label: "software solution; website,mobile app or an AI assistant", nextMenuId: "software" },
-      {number: 2, label: " File KRA returns", nextMenuId: "returns_start" },
-      {number: 3, label: " Cyber Services; Printing, binding, online services..", nextMenuId: "cyber" },
+      {number: 2, label: "File KRA returns", nextMenuId: "returns_start" },
+      {number: 3, label: "Cyber Services; Printing, binding, online services..", nextMenuId: "cyber" },
       { number: 4, label: "Installation Services; wifi, CCTV, DSTV...", nextMenuId: "installation" },
-      { number: 5, label: " Continue to chat", response: "Great, You can now write your message. Ezra will reply when available.", nextMenuId: null },
+      { number: 5, label: "Continue to chat", response: "Great, You can now write your message. Ezra will reply when available.", nextMenuId: null },
     ],
   },
 
   software: {
     id: "software",
-    message: " What software solution are you interested in?\n\nSelect an option:",
+    message: "What software solution are you interested in?\n\nSelect an option:",
     options: [
       { number: 1, label: "Website", nextMenuId: "software_details" },
       { number: 2, label: "Mobile app", nextMenuId: "software_details" },
@@ -40,7 +40,7 @@ export const conversationMenus: Record<string, Menu> = {
 
   software_details: {
     id: "software_details",
-    message: " Please provide brief details about the project or reply with the key features you need.",
+    message: "Please provide brief details about the project or reply with the key features you need.",
     options: [
       { number: 1, label: "Reply with details", nextMenuId: "software_platform" },
       { number: 5, label: "Continue to chat", response: "Great, You can now write your message. Ezra will reply when available.", nextMenuId: null },
@@ -49,7 +49,7 @@ export const conversationMenus: Record<string, Menu> = {
 
   software_platform: {
     id: "software_platform",
-    message: " Which platform do you want (Web, iOS, Android, Cross-platform)?",
+    message: "Which platform do you want (Web, iOS, Android, Cross-platform)?",
     options: [
       { number: 1, label: "Web", nextMenuId: "software_timeline" },
       { number: 2, label: "iOS", nextMenuId: "software_timeline" },
@@ -61,7 +61,7 @@ export const conversationMenus: Record<string, Menu> = {
 
   software_timeline: {
     id: "software_timeline",
-    message: " When would you like the project to be completed?\n\nReply with your preferred timeline (e.g., 1 month, 3 months, ASAP).",
+    message: "When would you like the project to be completed?\n\nReply with your preferred timeline (e.g., 1 month, 3 months, ASAP).",
     options: [
       { number: 1, label: "Reply with timeline", response: null },
       { number: 5, label: "Continue to chat", response: "Great, You can now write your message. Ezra will reply when available.", nextMenuId: null },
@@ -174,15 +174,24 @@ export const conversationMenus: Record<string, Menu> = {
 /**
  * Format menu as WhatsApp message with numbered options
  */
+function normalizeMenuText(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => line.trimStart())
+    .join("\n")
+    .trim();
+}
+
 export function formatMenuMessage(menuId: string): string {
   const menu = conversationMenus[menuId];
   if (!menu) return "Invalid menu. Please start over.";
 
+  const messageText = normalizeMenuText(menu.message);
   const optionsText = menu.options
-    .map((opt) => `${opt.number}. ${opt.label}`)
+    .map((opt) => `${opt.number}. ${opt.label.trimStart()}`)
     .join("\n");
 
-  return `${menu.message}\n\n${optionsText}`;
+  return `${messageText}\n\n${optionsText}`;
 }
 
 export interface MenuResult {

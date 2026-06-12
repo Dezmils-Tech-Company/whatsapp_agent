@@ -13,6 +13,25 @@ import { getAutoReply } from "../rules/autoReply.js";
 import { dmRules } from "../rules/dmRules.js";
 import { config } from "../config.js";
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsKeyword(text: string, keyword: string) {
+  const normalizedText = text.toLowerCase();
+  const normalizedKeyword = keyword.toLowerCase().trim();
+  if (!normalizedKeyword) return false;
+
+  const regex = new RegExp(`\\b${escapeRegExp(normalizedKeyword)}\\b`, "i");
+  if (regex.test(normalizedText)) {
+    return true;
+  }
+
+  return normalizedText
+    .split(/[.!?\n]/)
+    .some((sentence) => sentence.trim().includes(normalizedKeyword));
+}
+
 function formatIntroMessage(businessName?: string) {
   const name = businessName || "this business";
   return (
@@ -43,11 +62,16 @@ export async function handleDirectMessage(
     // Immediate block keywords: block on first match
     if (Array.isArray(dmRules.immediateBlockKeywords)) {
       const matchedImmediate = dmRules.immediateBlockKeywords.find((w: string) =>
-        lower.includes(w.toLowerCase())
+        containsKeyword(text, w)
       );
       if (matchedImmediate) {
         logger.info(`Message from ${jid} matched immediate block word "${matchedImmediate}".`);
         try {
+          responded = true;
+          await socket.sendMessage(jid, {
+            text: `🚫 You have been blocked by this business bot because your message contained the prohibited keyword: "${matchedImmediate}".`,
+          });
+
           if (_tracker && typeof (_tracker as any).registerViolation === "function") {
             const result = await (_tracker as any).registerViolation(jid, `immediate:${matchedImmediate}`);
             if (result?.action === "block") {
@@ -70,7 +94,7 @@ export async function handleDirectMessage(
 
     // Warning keywords: register and act according to tracker
     if (Array.isArray(dmRules.warningKeywords)) {
-      const matchedWarning = dmRules.warningKeywords.find((w: string) => lower.includes(w.toLowerCase()));
+      const matchedWarning = dmRules.warningKeywords.find((w: string) => containsKeyword(text, w));
       if (matchedWarning) {
         logger.info(`Message from ${jid} matched warning word "${matchedWarning}".`);
         try {
@@ -78,6 +102,10 @@ export async function handleDirectMessage(
             const result = await (_tracker as any).registerViolation(jid, `warning:${matchedWarning}`);
             if (result?.action === "block") {
               if ((db as any).blockUser && typeof (db as any).blockUser === "function") {
+                responded = true;
+                await socket.sendMessage(jid, {
+                  text: `🚫 You have been blocked by this business bot because your message contained the prohibited keyword: "${matchedWarning}".`,
+                });
                 await (db as any).blockUser(jid, `Violation threshold reached: ${matchedWarning}`);
                 logger.info(`Blocked user ${jid} after violations.`);
               }

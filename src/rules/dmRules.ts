@@ -11,7 +11,7 @@ export const dmRules: {
     "hate",
     "shut up",
     "annoying",
-    "love you",
+    "I love you",
     "i will visit you",
     "mazuri",
     "nitumie",
