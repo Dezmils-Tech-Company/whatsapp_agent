@@ -143,11 +143,7 @@ export async function handleDirectMessage(
   if (state?.allowDirectChat) {
     logger.info(`Free chat from ${jid}: ${text}`);
     // Forward to owner or handle elsewhere — no menu, no interference
-    if (ownerJid) {
-      await socket.sendMessage(ownerJid, {
-        text: `💬 Message from ${jid}:\n${text}`,
-      });
-    }
+    // Do not forward every free-chat message to the owner to avoid noise.
     return responded;
   }
 
